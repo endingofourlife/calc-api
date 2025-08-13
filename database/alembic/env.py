@@ -17,15 +17,15 @@ if config.config_file_name is not None:
 env = Env()
 env.read_env('.env')
 
-# url = URL.create( # for production
-#     drivername='postgresql+asyncpg',
-#     username=env.str('POSTGRES_USER'),
-#     password=env.str('POSTGRES_PASSWORD'),
-#     host=env.str('POSTGRES_HOST'),
-#     database=env.str('POSTGRES_DB'),
-#     port=5432
-# ).render_as_string(hide_password=False)
-url = "sqlite+aiosqlite:///database.db" # for testing purposes
+url = URL.create( # for production
+    drivername='postgresql+asyncpg',
+    username=env.str('POSTGRES_USER'),
+    password=env.str('POSTGRES_PASSWORD'),
+    host=env.str('POSTGRES_HOST'),
+    database=env.str('POSTGRES_DB'),
+    port=5432
+).render_as_string(hide_password=False)
+# url = "sqlite+aiosqlite:///database.db" # for testing purposes
 
 config.set_main_option("sqlalchemy.url", str(url))
 

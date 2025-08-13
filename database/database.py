@@ -8,15 +8,15 @@ Base = declarative_base()
 env = Env()
 env.read_env('.env')
 
-# DATABASE_URL = URL.create( # for production
-#     drivername='postgresql+asyncpg',
-#     username=env.str('POSTGRES_USER'),
-#     password=env.str('POSTGRES_PASSWORD'),
-#     host=env.str('POSTGRES_HOST'),
-#     database=env.str('POSTGRES_DB'),
-#     port=5432
-# ).render_as_string(hide_password=False)
-DATABASE_URL = "sqlite+aiosqlite:///database.db" # for testing purposes  TODO: REMOVE AIOSQLITE!!!!
+DATABASE_URL = URL.create( # for production
+    drivername='postgresql+asyncpg',
+    username=env.str('POSTGRES_USER'),
+    password=env.str('POSTGRES_PASSWORD'),
+    host=env.str('POSTGRES_HOST'),
+    database=env.str('POSTGRES_DB'),
+    port=5432
+).render_as_string(hide_password=False)
+# DATABASE_URL = "sqlite+aiosqlite:///database.db" # for testing purposes  TODO: REMOVE AIOSQLITE!!!!
 
 if "sqlite" in DATABASE_URL:
     engine = create_async_engine(DATABASE_URL, echo=False, connect_args={"check_same_thread": False})
