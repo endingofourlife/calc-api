@@ -4,8 +4,14 @@ from sqlalchemy import select, update
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from datetime import datetime
+
+from sqlalchemy.orm import selectinload
+
 from database.models import RealEstateObject
 from database import get_db
+from routes.v1.income_plans import IncomePlanResponse
+from routes.v1.premises import PremisesResponse
+from routes.v1.pricing_configs import PricingConfigResponse
 
 real_estate_objects_router = APIRouter()
 
@@ -47,6 +53,26 @@ class RealEstateObjectResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class RealEstateObjectFullResponse(BaseModel):
+    id: int
+    name: str
+    lon: Optional[float]
+    lat: Optional[float]
+    curr: Optional[str]
+    url: Optional[str]
+    created: datetime
+    updated: datetime
+    is_deleted: bool
+    custom_fields: Optional[Dict]
+
+    premises: List[PremisesResponse]
+    income_plans: List[IncomePlanResponse]
+    pricing_configs: List[PricingConfigResponse]
+
+    class Config:
+        from_attributes = True
+
+
 @real_estate_objects_router.post("/", response_model=RealEstateObjectResponse)
 async def create_real_estate_object(request: RealEstateObjectCreate, db: AsyncSession = Depends(get_db)):
     try:
@@ -67,18 +93,28 @@ async def create_real_estate_object(request: RealEstateObjectCreate, db: AsyncSe
         await db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-@real_estate_objects_router.get("/{id}", response_model=RealEstateObjectResponse)
+@real_estate_objects_router.get("/{id}", response_model=RealEstateObjectFullResponse)
 async def get_real_estate_object(id: int, db: AsyncSession = Depends(get_db)):
-    reo = await db.get(RealEstateObject, id)
+    reo = await db.get(
+        RealEstateObject,
+        id,
+        options=[
+            selectinload(RealEstateObject.premises),
+            selectinload(RealEstateObject.income_plans),
+            selectinload(RealEstateObject.pricing_configs)
+        ]
+    )
     if not reo:
         raise HTTPException(status_code=404, detail="RealEstateObject not found")
-    return RealEstateObjectResponse.from_orm(reo)
+    response = RealEstateObjectFullResponse.model_validate(reo)
+
+    return response
 
 @real_estate_objects_router.get("/", response_model=List[RealEstateObjectResponse])
 async def get_all_real_estate_objects(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(RealEstateObject).filter_by(is_deleted=False))
     reos = result.scalars().all()
-    return [RealEstateObjectResponse.from_orm(reo) for reo in reos]
+    return [RealEstateObjectResponse.model_validate(reo) for reo in reos]
 
 @real_estate_objects_router.put("/{id}", response_model=RealEstateObjectResponse)
 async def update_real_estate_object(id: int, request: RealEstateObjectUpdate, db: AsyncSession = Depends(get_db)):

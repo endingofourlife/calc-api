@@ -56,9 +56,12 @@ async def create_pricing_config(request: PricingConfigCreate, db: AsyncSession =
         await db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
-@pricing_configs_router.get("/{id}", response_model=PricingConfigResponse)
-async def get_pricing_config(id: int, db: AsyncSession = Depends(get_db)):
-    config = await db.get(PricingConfig, id)
+@pricing_configs_router.get("/{reo_id}", response_model=PricingConfigResponse)
+async def get_pricing_config(reo_id: int, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(PricingConfig).where(PricingConfig.reo_id == reo_id, PricingConfig.is_active == True)
+    )
+    config = result.scalar_one_or_none()
     if not config:
         raise HTTPException(status_code=404, detail="PricingConfig not found")
     return PricingConfigResponse.from_orm(config)

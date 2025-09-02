@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, insert
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 from datetime import datetime
-from database.models import Premises
+from database.models import Premises, RealEstateObject
 from database import get_db
 
 premises_router = APIRouter()
@@ -16,25 +16,25 @@ class PremisesCreate(BaseModel):
     number_of_unit: int
     number: int
     entrance: str
-    floor: int = Field(..., ge=-20, le=200)
+    floor: int
     layout_type: str
     full_price: Optional[float] = None
-    total_area_m2: float = Field(..., gt=0)
-    estimated_area_m2: float = Field(..., gt=0)
-    price_per_meter: float = Field(..., gt=0)
-    number_of_rooms: int = Field(..., ge=0)
-    living_area_m2: Optional[float] = Field(None, ge=0)
-    kitchen_area_m2: Optional[float] = Field(None, ge=0)
+    total_area_m2: float
+    estimated_area_m2: float
+    price_per_meter: Optional[float] = None
+    number_of_rooms: Optional[int] = None
+    living_area_m2: Optional[float] = None
+    kitchen_area_m2: Optional[float] = None
     view_from_window: Optional[str] = None
-    number_of_levels: Optional[int] = Field(None, ge=0)
-    number_of_loggias: Optional[int] = Field(None, ge=0)
-    number_of_balconies: Optional[int] = Field(None, ge=0)
-    number_of_bathrooms_with_toilets: Optional[int] = Field(None, ge=0)
-    number_of_separate_bathrooms: Optional[int] = Field(None, ge=0)
-    number_of_terraces: Optional[int] = Field(None, ge=0)
+    number_of_levels: Optional[int] = None
+    number_of_loggias: Optional[int] = None
+    number_of_balconies: Optional[int] = None
+    number_of_bathrooms_with_toilets: Optional[int] = None
+    number_of_separate_bathrooms: Optional[int] = None
+    number_of_terraces: Optional[int] = None
     studio: bool = False
     status: str
-    sales_amount: Optional[float] = Field(None, ge=0)
+    sales_amount: Optional[float] = None
     customcontent: Optional[Dict] = None
 
     class Config:
@@ -102,6 +102,42 @@ class PremisesResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class BulkPremisesCreateRequest(BaseModel):
+    premises: List[PremisesCreate]
+
+@premises_router.post("/bulk", response_model=List[PremisesResponse])
+async def create_bulk_premises(request: BulkPremisesCreateRequest, db: AsyncSession = Depends(get_db)):
+    try:
+        reo_ids = {premise.reo_id for premise in request.premises}
+        if len(reo_ids) > 1:
+            raise HTTPException(status_code=400, detail="All premises must reference the same RealEstateObject")
+        reo_id = reo_ids.pop()
+
+        reo = await db.get(RealEstateObject, reo_id)
+        if not reo:
+            raise HTTPException(status_code=404, detail=f"RealEstateObject with id {reo_id} not found")
+
+        premises_data = [premise.model_dump() for premise in request.premises]
+
+        await db.execute(
+            insert(Premises),
+            premises_data
+        )
+
+        await db.commit()
+
+        result = await db.execute(
+            select(Premises).where(Premises.reo_id == reo_id).order_by(Premises.id.desc()).limit(len(premises_data))
+        )
+        created_premises = result.scalars().all()
+
+        return [PremisesResponse.model_validate(p) for p in created_premises]
+
+    except Exception as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @premises_router.post("/", response_model=PremisesResponse)
 async def create_premises(request: PremisesCreate, db: AsyncSession = Depends(get_db)):
